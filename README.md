@@ -7,7 +7,7 @@
 Развернуть веб-страницу на поддомене:
 
 ```text
-test.%ваш_сабдомен%.kitek-pg.ru
+nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 и настроить для неё HTTPS с сертификатом Let's Encrypt.
@@ -31,7 +31,7 @@ _В рамках того, что мы используем один и тот �
 Для поддомена должна существовать DNS-запись:
 
 ```text
-test.%ваш_сабдомен%.kitek-pg.ru
+nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 Она должна указывать на IP вашего VPS.
@@ -39,7 +39,7 @@ test.%ваш_сабдомен%.kitek-pg.ru
 Проверить DNS:
 
 ```bash
-dig +short test.%ваш_сабдомен%.kitek-pg.ru
+dig +short nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 В результате должен быть IP вашего VPS.
@@ -51,7 +51,7 @@ dig +short test.%ваш_сабдомен%.kitek-pg.ru
 Откройте существующий конфигурационный файл:
 
 ```bash
-nano /srv/static-site/conf.d/default.conf
+nano /srv/web/nginx/nginx.conf
 ```
 
 Добавьте отдельный `server` для поддомена:
@@ -59,10 +59,10 @@ nano /srv/static-site/conf.d/default.conf
 ```nginx
 server {
     listen 80;
-    server_name test.%ваш_сабдомен%.kitek-pg.ru;
+    server_name nginx.%ваш_сабдомен%.kitek-pg.ru;
 
     location / {
-        root /usr/share/nginx/html/test;
+        root /var/www/nginx/html;
         index index.html;
     }
 }
@@ -83,16 +83,16 @@ docker compose restart
 Проверить:
 
 ```bash
-curl -I http://test.%ваш_сабдомен%.kitek-pg.ru
+curl -I http://nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 Создать папку под `test`
 
 ```bash
-mkdir /srv/static-site/nginx/test
+mkdir /srv/web/nginx/www/nginx
 ```
 
-Создайте внутри `index.html` с содержимым `index.html` из этого репозитория
+Склонируйте репо так, чтобы внутри папки nginx было содержимое репо.
 
 ---
 
@@ -172,7 +172,7 @@ docker ps
 Выполнить:
 
 ```bash
-sudo certbot certonly --standalone -d test.%ваш_сабдомен%.kitek-pg.ru
+sudo certbot certonly --standalone -d nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 Certbot выполнит проверку домена и создаст сертификат.
@@ -180,13 +180,13 @@ Certbot выполнит проверку домена и создаст сер�
 При успешном выполнении сертификаты будут находиться примерно здесь:
 
 ```text
-/etc/letsencrypt/live/test.%ваш_сабдомен%.kitek-pg.ru/
+/etc/letsencrypt/live/nginx.%ваш_сабдомен%.kitek-pg.ru/
 ```
 
 Проверить:
 
 ```bash
-sudo ls -la /etc/letsencrypt/live/test.%ваш_сабдомен%.kitek-pg.ru/
+sudo ls -la /etc/letsencrypt/live/nginx.%ваш_сабдомен%.kitek-pg.ru/
 ```
 
 В каталоге должны присутствовать:
@@ -205,7 +205,7 @@ privkey.pem
 Откройте:
 
 ```bash
-nano /srv/static-site/docker-compose.yaml
+nano /srv/web/docker-compose.yaml
 ```
 
 В `nginx` добавьте монтирование:
@@ -214,28 +214,26 @@ _У вас оно уже будет_
 
 ```yaml
 volumes:
-  - ./nginx:/usr/share/nginx/html:ro
-  - ./conf.d:/etc/nginx/conf.d:ro
-  - /etc/letsencrypt:/etc/letsencrypt:ro
+    - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    - ./nginx/www:/var/www/nginx/html:ro
+    - /etc/letsencrypt:/etc/letsencrypt:ro
 ```
 
 В результате часть Compose должна выглядеть примерно так:
 
 ```yaml
 services:
-  nginx:
-    image: nginx
-    container_name: nginx
-    restart: unless-stopped
-
-    ports:
-      - "80:80"
-      - "443:443"
-
-    volumes:
-      - ./html:/usr/share/nginx/html:ro
-      - ./conf.d:/etc/nginx/conf.d:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+    nginx:
+        container_name: nginx
+        volumes:
+            - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+            - ./nginx/www:/var/www/nginx/html:ro
+            - /etc/letsencrypt:/etc/letsencrypt:ro
+        image: nginx
+        ports:
+            - 80:80
+            - 443:443
+        restart: unless-stopped
 ```
 
 Обратите внимание на:
@@ -253,31 +251,31 @@ services:
 Откройте:
 
 ```bash
-nano /srv/static-site/conf.d/default.conf
+nano /srv/web/nginx/nginx.conf
 ```
 
-Для `test.%ваш_сабдомен%.kitek-pg.ru` настройте два `server` блока:
+Для `nginx.%ваш_сабдомен%.kitek-pg.ru` настройте два `server` блока:
 
 ```nginx
 server {
     listen 80;
-    server_name test.%ваш_сабдомен%.kitek-pg.ru;
+    server_name nginx.%ваш_сабдомен%.kitek-pg.ru;
 
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
-    server_name test.%ваш_сабдомен%.kitek-pg.ru;
+    server_name nginx.%ваш_сабдомен%.kitek-pg.ru;
 
     ssl_certificate
-        /etc/letsencrypt/live/test.%ваш_сабдомен%.kitek-pg.ru/fullchain.pem;
+        /etc/letsencrypt/live/nginx.%ваш_сабдомен%.kitek-pg.ru/fullchain.pem;
 
     ssl_certificate_key
-        /etc/letsencrypt/live/test.%ваш_сабдомен%.kitek-pg.ru/privkey.pem;
+        /etc/letsencrypt/live/nginx.%ваш_сабдомен%.kitek-pg.ru/privkey.pem;
 
     location / {
-        root /usr/share/nginx/html/test;
+        root /var/www/nginx/html/nginx;
         index index.html;
     }
 }
@@ -355,7 +353,7 @@ ssl_certificate
 Выполнить:
 
 ```bash
-docker exec nginx ls -la /etc/letsencrypt/live/test.%ваш_сабдомен%.kitek-pg.ru/
+docker exec nginx ls -la /etc/letsencrypt/live/nginx.%ваш_сабдомен%.kitek-pg.ru/
 ```
 
 ---
@@ -365,7 +363,7 @@ docker exec nginx ls -la /etc/letsencrypt/live/test.%ваш_сабдомен%.ki
 Выполнить:
 
 ```bash
-curl -I https://test.%ваш_сабдомен%.kitek-pg.ru
+curl -I https://nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 Ожидаемый ответ:
@@ -383,24 +381,24 @@ HTTP/1.1 200 OK
 Выполнить:
 
 ```bash
-curl -I http://test.%ваш_сабдомен%.kitek-pg.ru
+curl -I http://nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 Ожидаемый результат:
 
 ```text
 HTTP/1.1 301 Moved Permanently
-Location: https://test.%ваш_сабдомен%.kitek-pg.ru/...
+Location: https://nginx.%ваш_сабдомен%.kitek-pg.ru/...
 ```
 
 Таким образом:
 
 ```text
-http://test.%ваш_сабдомен%.kitek-pg.ru
+http://nginx.%ваш_сабдомен%.kitek-pg.ru
         ↓
       301
         ↓
-https://test.%ваш_сабдомен%.kitek-pg.ru
+https://nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 ---
@@ -416,7 +414,7 @@ sudo certbot certificates
 В выводе должен присутствовать сертификат:
 
 ```text
-test.%ваш_сабдомен%.kitek-pg.ru
+nginx.%ваш_сабдомен%.kitek-pg.ru
 ```
 
 # 16. Сделать коммит
